@@ -41,11 +41,22 @@ pub fn parse(bytes: &[u8]) -> Result<SubtitleTrack> {
         };
         cues.push(SubtitleCue {
             start_us: ds_to_us(start_ds),
-            end_us: ds_to_us(end_ds),
+            end_us: if end_ds < 0 { -1 } else { ds_to_us(end_ds) },
             style_ref: None,
             positioning: None,
             segments: parse_inline(rest),
         });
+    }
+    cues.sort_by_key(|cue| cue.start_us);
+    for index in 0..cues.len() {
+        if cues[index].end_us < 0 {
+            // An absent end lasts until the next cue. At EOF, FFmpeg's
+            // negative duration becomes an unsigned millisecond duration.
+            cues[index].end_us = cues.get(index + 1).map_or_else(
+                || cues[index].start_us.saturating_add(i64::from(-100_i32 as u32) * 1000),
+                |next| next.start_us,
+            );
+        }
     }
     Ok(SubtitleTrack {
         cues,
@@ -147,7 +158,11 @@ pub(crate) fn bytes_to_cue(bytes: &[u8]) -> Result<SubtitleCue> {
         parse_header(line).ok_or_else(|| Error::invalid("mpl2: bad cue header"))?;
     Ok(SubtitleCue {
         start_us: ds_to_us(sd),
-        end_us: ds_to_us(ed),
+        end_us: if ed < 0 {
+            ds_to_us(sd).saturating_add(i64::from(-100_i32 as u32) * 1000)
+        } else {
+            ds_to_us(ed)
+        },
         style_ref: None,
         positioning: None,
         segments: parse_inline(rest),
@@ -164,7 +179,15 @@ fn parse_header(line: &str) -> Option<(i64, i64, &str)> {
     let after1 = &rest[e1 + 1..];
     let after1 = after1.strip_prefix('[')?;
     let e2 = after1.find(']')?;
-    let ds2: i64 = after1[..e2].trim().parse().ok()?;
+    let end = after1[..e2].trim();
+    let ds2: i64 = if end.is_empty() { -1 } else { end.parse().ok()? };
+    if ds1 < 0 || ds2 < -1 {
+        return None;
+    }
+    ds1.checked_mul(100_000)?;
+    if ds2 >= 0 {
+        ds2.checked_mul(100_000)?;
+    }
     Some((ds1, ds2, &after1[e2 + 1..]))
 }
 
@@ -174,34 +197,42 @@ fn parse_inline(body: &str) -> Vec<Segment> {
         if idx > 0 {
             out.push(Segment::LineBreak);
         }
-        if let Some(rest) = piece.strip_prefix('/') {
-            // Italicise this line only.
-            let mut inner: Vec<Segment> = Vec::new();
-            if !rest.is_empty() {
-                inner.push(Segment::Text(rest.to_string()));
-            }
-            out.push(Segment::Italic(inner));
-        } else if !piece.is_empty() {
-            out.push(Segment::Text(piece.to_string()));
+        let mut text = piece.trim_start();
+        let mut style = 0u8;
+        while let Some(marker) = text.as_bytes().first() {
+            style |= match marker {
+                b'/' => 1,
+                b'\\' => 2,
+                b'_' => 4,
+                _ => break,
+            };
+            text = &text[1..];
+        }
+        if !text.is_empty() {
+            let mut segment = Segment::Text(text.to_string());
+            if style & 1 != 0 { segment = Segment::Italic(vec![segment]); }
+            if style & 2 != 0 { segment = Segment::Bold(vec![segment]); }
+            if style & 4 != 0 { segment = Segment::Underline(vec![segment]); }
+            out.push(segment);
         }
     }
     out
 }
 
 fn render_inline(segments: &[Segment]) -> String {
-    // Render line-by-line so the `/` italic marker lands on a fresh
-    // segment of text. We flatten nested styles to plain text with the
-    // single `/` italic marker when applicable.
+    // MPL2's style markers apply to an entire line.
     let mut lines: Vec<String> = vec![String::new()];
-    let mut line_italic: Vec<bool> = vec![false];
-    append_flat(segments, &mut lines, &mut line_italic, false);
+    let mut line_styles: Vec<u8> = vec![0];
+    append_flat(segments, &mut lines, &mut line_styles, 0);
     let mut out = String::new();
-    for (i, (line, is_italic)) in lines.iter().zip(line_italic.iter()).enumerate() {
+    for (i, (line, style)) in lines.iter().zip(line_styles.iter()).enumerate() {
         if i > 0 {
             out.push('|');
         }
-        if *is_italic && !line.is_empty() {
-            out.push('/');
+        if !line.is_empty() {
+            if style & 1 != 0 { out.push('/'); }
+            if style & 2 != 0 { out.push('\\'); }
+            if style & 4 != 0 { out.push('_'); }
         }
         // `|` in text is reserved as a line break; sanitise.
         out.push_str(&line.replace('|', "/"));
@@ -212,32 +243,32 @@ fn render_inline(segments: &[Segment]) -> String {
 fn append_flat(
     segments: &[Segment],
     lines: &mut Vec<String>,
-    line_italic: &mut Vec<bool>,
-    italic: bool,
+    line_styles: &mut Vec<u8>,
+    style: u8,
 ) {
     for seg in segments {
         match seg {
             Segment::Text(s) => {
                 let idx = lines.len() - 1;
                 lines[idx].push_str(s);
-                if italic && !s.is_empty() {
-                    line_italic[idx] = true;
+                if !s.is_empty() {
+                    line_styles[idx] |= style;
                 }
             }
             Segment::LineBreak => {
                 lines.push(String::new());
-                line_italic.push(false);
+                line_styles.push(0);
             }
-            Segment::Italic(c) => append_flat(c, lines, line_italic, true),
-            Segment::Bold(c) | Segment::Underline(c) | Segment::Strike(c) => {
-                append_flat(c, lines, line_italic, italic)
-            }
+            Segment::Italic(c) => append_flat(c, lines, line_styles, style | 1),
+            Segment::Bold(c) => append_flat(c, lines, line_styles, style | 2),
+            Segment::Underline(c) => append_flat(c, lines, line_styles, style | 4),
+            Segment::Strike(c) => append_flat(c, lines, line_styles, style),
             Segment::Color { children, .. }
             | Segment::Font { children, .. }
             | Segment::Voice { children, .. }
             | Segment::Class { children, .. }
             | Segment::Karaoke { children, .. } => {
-                append_flat(children, lines, line_italic, italic)
+                append_flat(children, lines, line_styles, style)
             }
             Segment::Timestamp { .. } => {}
             Segment::Raw(_) => {}
@@ -252,7 +283,7 @@ fn ds_to_us(ds: i64) -> i64 {
 }
 
 fn us_to_ds(us: i64) -> i64 {
-    (us + 50_000) / 100_000
+    ((i128::from(us) + 50_000) / 100_000) as i64
 }
 
 // ---------------------------------------------------------------------------

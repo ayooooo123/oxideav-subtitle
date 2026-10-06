@@ -9,6 +9,14 @@ SAMI, EBU STL — plus a text-to-RGBA compositor and a
 
 Part of the [oxideav](https://github.com/OxideAV/oxideav-workspace) framework — a pure-Rust media transcoding and streaming stack. Codec, container, and filter crates are implemented from the spec (no C codec libraries linked or wrapped, no `*-sys` crates). Optional hardware-engine crates (`oxideav-videotoolbox` / `-audiotoolbox` / `-vaapi` / `-vdpau` / `-nvidia` / `-vulkan-video`) bridge to OS APIs via runtime `libloading`; pass `--no-hwaccel` (or omit the `hwaccel` feature) to opt out.
 
+## PearTube fork compatibility
+
+MPL2 accepts omitted end timestamps and resolves them after stable chronological
+ordering, including the final open-ended display interval. Per-line `/` italic,
+`\` bold and `_` underline prefixes are parsed as style rather than visible text.
+The production-registry regression compares every cue's visible text and interval
+from FATE `sub/MPL2_capability_tester.txt` with FFmpeg.
+
 ## Usage
 
 ```toml
