@@ -79,9 +79,9 @@ impl Decoder for SubtitleDecoder {
         if let Some(pts) = packet.pts {
             // Rescale the pts from packet.time_base into microseconds.
             let us = rescale_to_us(pts, packet.time_base);
-            let span = cue.end_us - cue.start_us;
+            let span = cue.end_us.saturating_sub(cue.start_us);
             cue.start_us = us;
-            cue.end_us = us + span;
+            cue.end_us = us.saturating_add(span);
         }
         self.pending.push_back(Frame::Subtitle(cue));
         Ok(())

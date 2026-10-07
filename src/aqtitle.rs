@@ -309,9 +309,9 @@ impl Decoder for AqtDecoder {
         let mut cue = bytes_to_cue(&packet.data)?;
         if let Some(pts) = packet.pts {
             let us = packet.time_base.rescale(pts, TimeBase::new(1, 1_000_000));
-            let span = cue.end_us - cue.start_us;
+            let span = cue.end_us.saturating_sub(cue.start_us);
             cue.start_us = us;
-            cue.end_us = us + span;
+            cue.end_us = us.saturating_add(span);
         }
         self.pending.push_back(Frame::Subtitle(cue));
         Ok(())
