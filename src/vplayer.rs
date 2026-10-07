@@ -272,10 +272,11 @@ impl Decoder for VPlayerDecoder {
             cue.end_us = us.saturating_add(span);
         }
         // Prefer the packet duration when available — VPlayer's on-wire
-        // shape has no end time.
+        // shape has no end time. Saturated like the span above, so a cue at
+        // a time edge ends at the edge instead of wrapping.
         if let Some(dur) = packet.duration {
             let dur_us = packet.time_base.rescale(dur, TimeBase::new(1, 1_000_000));
-            cue.end_us = cue.start_us + dur_us;
+            cue.end_us = cue.start_us.saturating_add(dur_us);
         }
         self.pending.push_back(Frame::Subtitle(cue));
         Ok(())
@@ -370,5 +371,24 @@ mod tests {
     #[test]
     fn probe_negative() {
         assert_eq!(probe(b"random text\nhello world\n"), 0);
+    }
+
+    /// A packet's duration sets the cue end, clamped at the edge of time: a
+    /// cue at the last representable microsecond ends there instead of
+    /// wrapping round to the other end.
+    #[test]
+    fn packet_duration_end_clamps_at_the_time_limit() {
+        let params = CodecParameters::subtitle(CodecId::new(CODEC_ID));
+        for (pts, duration, end) in [(i64::MAX, 1, i64::MAX), (i64::MIN, -1, i64::MIN)] {
+            let mut decoder = make_decoder(&params).unwrap();
+            let packet = Packet::new(0, TimeBase::new(1, 1_000_000), b"00:00:00:x".to_vec())
+                .with_pts(pts)
+                .with_duration(duration);
+            decoder.send_packet(&packet).unwrap();
+            let Frame::Subtitle(cue) = decoder.receive_frame().unwrap() else {
+                panic!("pts {pts}: not a subtitle frame");
+            };
+            assert_eq!((cue.start_us, cue.end_us), (pts, end), "pts {pts}, duration {duration}");
+        }
     }
 }
