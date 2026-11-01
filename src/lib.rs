@@ -84,7 +84,7 @@ pub mod webvtt;
 
 use oxideav_core::ContainerRegistry;
 use oxideav_core::RuntimeContext;
-use oxideav_core::{CodecCapabilities, CodecId, MediaType};
+use oxideav_core::{CodecCapabilities, CodecId};
 use oxideav_core::{CodecInfo, CodecRegistry};
 
 pub use ass_anim::{
@@ -121,25 +121,7 @@ pub use ttml::{
 /// subtitle registered here is `decode=true, encode=true, intra_only=true,
 /// lossless=true, media_type=Subtitle`.
 fn subtitle_caps(impl_name: &str) -> CodecCapabilities {
-    CodecCapabilities {
-        decode: false,
-        encode: false,
-        media_type: MediaType::Subtitle,
-        intra_only: true,
-        lossy: false,
-        lossless: true,
-        hardware_accelerated: false,
-        implementation: impl_name.into(),
-        max_width: None,
-        max_height: None,
-        max_bitrate: None,
-        max_sample_rate: None,
-        max_channels: None,
-        priority: 100,
-        accepted_pixel_formats: Vec::new(),
-        // Fields this subtitle codec does not constrain keep their defaults.
-        ..CodecCapabilities::audio(String::new())
-    }
+    CodecCapabilities::subtitle(impl_name)
 }
 
 /// Register all text subtitle codecs (decoders + encoders). Each

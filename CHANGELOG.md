@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Construct subtitle capabilities through the non-exhaustive-safe core
+  constructor, preserving all previous field values and registration behavior.
+
 ### Added
 
 - `\q0`–`\q3` line-wrapping tag typing (`AssTag::WrapMode(WrapStyle)`),
