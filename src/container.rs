@@ -67,6 +67,25 @@ pub fn register(reg: &mut ContainerRegistry) {
     register_fmt::<EbuStl>(reg, "ebu_stl", &["stl"]);
 }
 
+/// Registers only the 7 standalone text demuxers that `subs-text` does not replace, leaving all 8
+/// shadowed parsers and every muxer unreferenced so LTO strips them to the bone.
+pub fn register_unshadowed_demuxers(reg: &mut ContainerRegistry) {
+    fn reg_demux<F: FormatOps>(reg: &mut ContainerRegistry, name: &'static str, exts: &[&str]) {
+        reg.register_demuxer(name, open_fmt::<F>);
+        for e in exts {
+            reg.register_extension(e, name);
+        }
+        reg.register_probe(name, probe_fmt::<F>);
+    }
+    reg_demux::<Mpl2>(reg, "mpl2", &["mpl"]);
+    reg_demux::<MpSub>(reg, "mpsub", &["sub"]);
+    reg_demux::<Pjs>(reg, "pjs", &["pjs"]);
+    reg_demux::<AqTitle>(reg, "aqtitle", &["aqt"]);
+    reg_demux::<JacoSub>(reg, "jacosub", &["jss", "js"]);
+    reg_demux::<RealText>(reg, "realtext", &["rt"]);
+    reg_demux::<EbuStl>(reg, "ebu_stl", &["stl"]);
+}
+
 fn register_fmt<F: FormatOps>(reg: &mut ContainerRegistry, name: &'static str, exts: &[&str]) {
     reg.register_demuxer(name, open_fmt::<F>);
     reg.register_muxer(name, mux_fmt::<F>);

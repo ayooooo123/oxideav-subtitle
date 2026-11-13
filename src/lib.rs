@@ -183,6 +183,28 @@ pub fn register(ctx: &mut RuntimeContext) {
     register_containers(&mut ctx.containers);
 }
 
+/// Installs only the 7 unshadowed text decoders and demuxers (`mpl2`, `mpsub`, `pjs`, `aqtitle`,
+/// `jacosub`, `realtext`, `ebu_stl`), keeping every shadowed parser and encoder out of the binary.
+pub fn register_unshadowed_decode(ctx: &mut RuntimeContext) {
+    macro_rules! reg_dec {
+        ($module:ident, $impl_name:literal) => {
+            ctx.codecs.register(
+                CodecInfo::new(CodecId::new($module::CODEC_ID))
+                    .capabilities(subtitle_caps($impl_name))
+                    .decoder($module::make_decoder),
+            );
+        };
+    }
+    reg_dec!(mpl2, "mpl2_sw");
+    reg_dec!(mpsub, "mpsub_sw");
+    reg_dec!(pjs, "pjs_sw");
+    reg_dec!(aqtitle, "aqtitle_sw");
+    reg_dec!(jacosub, "jacosub_sw");
+    reg_dec!(realtext, "realtext_sw");
+    reg_dec!(ebu_stl, "ebu_stl_sw");
+    container::register_unshadowed_demuxers(&mut ctx.containers);
+}
+
 oxideav_core::register!("subtitle", register);
 
 #[cfg(test)]
