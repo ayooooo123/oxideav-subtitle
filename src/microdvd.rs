@@ -54,13 +54,14 @@ pub fn parse(bytes: &[u8]) -> Result<SubtitleTrack> {
         // FPS-setter line: `{1}{1}<fps>` with a parseable float body and no
         // other formatting — applies retroactively only for subsequent cues
         // (there shouldn't be any prior cues anyway).
-        if start_frame == 1 && end_frame == 1 {
-            if let Ok(v) = rest.trim().parse::<f64>() {
-                if v > 0.0 && v < 1_000.0 {
-                    fps = v;
-                    continue;
-                }
-            }
+        if start_frame == 1
+            && end_frame == 1
+            && let Ok(v) = rest.trim().parse::<f64>()
+            && v > 0.0
+            && v < 1_000.0
+        {
+            fps = v;
+            continue;
         }
 
         let start_us = frame_to_us(start_frame, fps);
@@ -109,6 +110,9 @@ pub fn write(track: &SubtitleTrack) -> Result<Vec<u8>> {
 
 /// Quick probe — looks at the first non-empty lines for `{n}{n}...` shape.
 pub fn probe(buf: &[u8]) -> u8 {
+    if !crate::encoding::looks_like_text(buf) {
+        return 0;
+    }
     let text = crate::encoding::decode_subtitle_text(buf);
     let mut checked = 0;
     let mut hits = 0;
@@ -443,12 +447,11 @@ fn extract_fps(extradata: &[u8]) -> f64 {
     }
     let text = String::from_utf8_lossy(extradata);
     for line in text.lines() {
-        if let Some(v) = line.trim().strip_prefix("fps=") {
-            if let Ok(f) = v.trim().parse::<f64>() {
-                if f > 0.0 {
-                    return f;
-                }
-            }
+        if let Some(v) = line.trim().strip_prefix("fps=")
+            && let Ok(f) = v.trim().parse::<f64>()
+            && f > 0.0
+        {
+            return f;
         }
     }
     DEFAULT_FPS

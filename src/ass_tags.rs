@@ -51,6 +51,7 @@ use crate::ass_script_info::WrapStyle;
 
 /// One lexical unit of a Dialogue `Text` field.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AssToken {
     /// Plain visible text (verbatim, including any backslash sequence
     /// that is not one of the three recognised escapes).
@@ -266,6 +267,7 @@ pub enum AssFadeSpec {
 /// (e.g. `\i2`) falls through to [`AssTag::Other`] verbatim rather
 /// than guessing at semantics, so re-emit stays byte-stable.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AssTag {
     /// `\b` — bold. `Some(0)` off, `Some(1)` on; values greater than 1
     /// are an explicit font weight ("400 = Normal, 700 = Bold" per the
@@ -1135,17 +1137,17 @@ fn classify_clip(tag: &str) -> Option<AssTag> {
     // an undocumented two-coordinate list stays an untyped
     // [`AssTag::Other`].
     if parts.len() == 2 {
-        if let Some((scale, commands)) = args.split_once(',') {
-            if is_drawing_commands(commands) {
-                let scale = canon_u32(scale)?;
-                return Some(AssTag::Clip {
-                    inverse,
-                    shape: AssClipShape::Drawing {
-                        scale: Some(scale),
-                        commands: commands.to_string(),
-                    },
-                });
-            }
+        if let Some((scale, commands)) = args.split_once(',')
+            && is_drawing_commands(commands)
+        {
+            let scale = canon_u32(scale)?;
+            return Some(AssTag::Clip {
+                inverse,
+                shape: AssClipShape::Drawing {
+                    scale: Some(scale),
+                    commands: commands.to_string(),
+                },
+            });
         }
         return None;
     }

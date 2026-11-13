@@ -162,7 +162,7 @@ pub fn write(track: &SubtitleTrack) -> Result<Vec<u8>> {
 }
 
 pub fn probe(buf: &[u8]) -> u8 {
-    if looks_like_subviewer1(buf) {
+    if crate::encoding::looks_like_text(buf) && looks_like_subviewer1(buf) {
         80
     } else {
         0
@@ -257,7 +257,7 @@ impl Encoder for SvEncoder {
             _ => {
                 return Err(Error::invalid(
                     "subviewer1 encoder: expected Frame::Subtitle",
-                ))
+                ));
             }
         };
         let payload = cue_to_bytes(cue);

@@ -53,7 +53,11 @@ pub fn parse(bytes: &[u8]) -> Result<SubtitleTrack> {
             // An absent end lasts until the next cue. At EOF, FFmpeg's
             // negative duration becomes an unsigned millisecond duration.
             cues[index].end_us = cues.get(index + 1).map_or_else(
-                || cues[index].start_us.saturating_add(i64::from(-100_i32 as u32) * 1000),
+                || {
+                    cues[index]
+                        .start_us
+                        .saturating_add(i64::from(-100_i32 as u32) * 1000)
+                },
                 |next| next.start_us,
             );
         }
@@ -79,6 +83,9 @@ pub fn write(track: &SubtitleTrack) -> Result<Vec<u8>> {
 
 /// Quick probe: look for the `[n][n]...` shape.
 pub fn probe(buf: &[u8]) -> u8 {
+    if !crate::encoding::looks_like_text(buf) {
+        return 0;
+    }
     let text = crate::encoding::decode_subtitle_text(buf);
     let mut checked = 0;
     let mut hits = 0;
@@ -180,7 +187,11 @@ fn parse_header(line: &str) -> Option<(i64, i64, &str)> {
     let after1 = after1.strip_prefix('[')?;
     let e2 = after1.find(']')?;
     let end = after1[..e2].trim();
-    let ds2: i64 = if end.is_empty() { -1 } else { end.parse().ok()? };
+    let ds2: i64 = if end.is_empty() {
+        -1
+    } else {
+        end.parse().ok()?
+    };
     if ds1 < 0 || ds2 < -1 {
         return None;
     }
@@ -210,9 +221,15 @@ fn parse_inline(body: &str) -> Vec<Segment> {
         }
         if !text.is_empty() {
             let mut segment = Segment::Text(text.to_string());
-            if style & 1 != 0 { segment = Segment::Italic(vec![segment]); }
-            if style & 2 != 0 { segment = Segment::Bold(vec![segment]); }
-            if style & 4 != 0 { segment = Segment::Underline(vec![segment]); }
+            if style & 1 != 0 {
+                segment = Segment::Italic(vec![segment]);
+            }
+            if style & 2 != 0 {
+                segment = Segment::Bold(vec![segment]);
+            }
+            if style & 4 != 0 {
+                segment = Segment::Underline(vec![segment]);
+            }
             out.push(segment);
         }
     }
@@ -230,9 +247,15 @@ fn render_inline(segments: &[Segment]) -> String {
             out.push('|');
         }
         if !line.is_empty() {
-            if style & 1 != 0 { out.push('/'); }
-            if style & 2 != 0 { out.push('\\'); }
-            if style & 4 != 0 { out.push('_'); }
+            if style & 1 != 0 {
+                out.push('/');
+            }
+            if style & 2 != 0 {
+                out.push('\\');
+            }
+            if style & 4 != 0 {
+                out.push('_');
+            }
         }
         // `|` in text is reserved as a line break; sanitise.
         out.push_str(&line.replace('|', "/"));
@@ -267,9 +290,7 @@ fn append_flat(
             | Segment::Font { children, .. }
             | Segment::Voice { children, .. }
             | Segment::Class { children, .. }
-            | Segment::Karaoke { children, .. } => {
-                append_flat(children, lines, line_styles, style)
-            }
+            | Segment::Karaoke { children, .. } => append_flat(children, lines, line_styles, style),
             Segment::Timestamp { .. } => {}
             Segment::Raw(_) => {}
         }
@@ -392,10 +413,12 @@ mod tests {
     fn line_break() {
         let src = "[0][10]line1|line2\n";
         let t = parse(src.as_bytes()).unwrap();
-        assert!(t.cues[0]
-            .segments
-            .iter()
-            .any(|s| matches!(s, Segment::LineBreak)));
+        assert!(
+            t.cues[0]
+                .segments
+                .iter()
+                .any(|s| matches!(s, Segment::LineBreak))
+        );
     }
 
     #[test]

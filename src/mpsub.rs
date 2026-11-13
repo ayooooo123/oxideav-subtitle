@@ -64,32 +64,30 @@ pub fn parse(bytes: &[u8]) -> Result<SubtitleTrack> {
         }
 
         // Header line? (only while no cue has been parsed yet).
-        if !header_done {
-            if let Some(eq) = line.find('=') {
-                let key = line[..eq].trim();
-                let val = line[eq + 1..].trim();
-                if is_header_key(key) {
-                    let key_upper = key.to_ascii_uppercase();
-                    match key_upper.as_str() {
-                        "FORMAT" => {
-                            mode = match val.to_ascii_uppercase().as_str() {
-                                "FRAMES" => Mode::Frames,
-                                _ => Mode::Time,
-                            };
-                        }
-                        "FPS" => {
-                            if let Ok(v) = val.parse::<f64>() {
-                                if v > 0.0 {
-                                    fps = v;
-                                }
-                            }
-                        }
-                        _ => {}
+        if !header_done && let Some(eq) = line.find('=') {
+            let key = line[..eq].trim();
+            let val = line[eq + 1..].trim();
+            if is_header_key(key) {
+                let key_upper = key.to_ascii_uppercase();
+                match key_upper.as_str() {
+                    "FORMAT" => {
+                        mode = match val.to_ascii_uppercase().as_str() {
+                            "FRAMES" => Mode::Frames,
+                            _ => Mode::Time,
+                        };
                     }
-                    metadata.push((key.to_string(), val.to_string()));
-                    i += 1;
-                    continue;
+                    "FPS" => {
+                        if let Ok(v) = val.parse::<f64>()
+                            && v > 0.0
+                        {
+                            fps = v;
+                        }
+                    }
+                    _ => {}
                 }
+                metadata.push((key.to_string(), val.to_string()));
+                i += 1;
+                continue;
             }
         }
 
@@ -187,6 +185,9 @@ pub fn write(track: &SubtitleTrack) -> Result<Vec<u8>> {
 
 /// Quick probe — positive score if a `FORMAT=` header appears early.
 pub fn probe(buf: &[u8]) -> u8 {
+    if !crate::encoding::looks_like_text(buf) {
+        return 0;
+    }
     let text = crate::encoding::decode_subtitle_text(buf);
     let mut checked = 0;
     let mut saw_format = false;
@@ -384,11 +385,7 @@ fn fmt_secs(us: i64) -> String {
     } else {
         format!("{}.{}", whole, frac_str)
     };
-    if neg {
-        format!("-{}", base)
-    } else {
-        base
-    }
+    if neg { format!("-{}", base) } else { base }
 }
 
 // ---------------------------------------------------------------------------

@@ -145,6 +145,7 @@ impl Collisions {
 /// Even those are missing on real-world files often enough that we
 /// don't force them either; callers decide what to do with `None`.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct AssScriptInfo {
     pub title: Option<String>,
     pub original_script: Option<String>,
@@ -441,10 +442,11 @@ mod tests {
         let info = script_info(&t);
         assert_eq!(info.title.as_deref(), Some("X"));
         // The custom keys stay in t.metadata; the accessor doesn't drop them.
-        assert!(t
-            .metadata
-            .iter()
-            .any(|(k, _)| k == "aegisub_project_garbage"));
+        assert!(
+            t.metadata
+                .iter()
+                .any(|(k, _)| k == "aegisub_project_garbage")
+        );
     }
 
     #[test]

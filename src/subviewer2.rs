@@ -179,7 +179,7 @@ pub fn write(track: &SubtitleTrack) -> Result<Vec<u8>> {
 }
 
 pub fn probe(buf: &[u8]) -> u8 {
-    if looks_like_subviewer2(buf) {
+    if crate::encoding::looks_like_text(buf) && looks_like_subviewer2(buf) {
         92
     } else {
         0
@@ -274,7 +274,7 @@ impl Encoder for Sv2Encoder {
             _ => {
                 return Err(Error::invalid(
                     "subviewer2 encoder: expected Frame::Subtitle",
-                ))
+                ));
             }
         };
         let payload = cue_to_bytes(cue);
@@ -516,10 +516,11 @@ Last
     #[test]
     fn parses_metadata() {
         let t = parse(SAMPLE.as_bytes()).unwrap();
-        assert!(t
-            .metadata
-            .iter()
-            .any(|(k, v)| k == "title" && v == "Example"));
+        assert!(
+            t.metadata
+                .iter()
+                .any(|(k, v)| k == "title" && v == "Example")
+        );
         assert!(t.metadata.iter().any(|(k, v)| k == "author" && v == "Me"));
     }
 
